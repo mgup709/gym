@@ -89,7 +89,7 @@ export function Today({ state, update, today, go }: ViewProps) {
       {!plan.day.isTraining && (
         <div className="card flat">
           <p className="small">{plan.day.objective}</p>
-          {plan.core.length > 0 && <p className="small">Deep core today: {plan.core.map((c) => c.levelName).join(' · ')}</p>}
+          {plan.core.length > 0 && <p className="small">Deep core today: {plan.core.map((c) => CORE_BY_ID[c.moveId].name).join(' · ')}</p>}
         </div>
       )}
 

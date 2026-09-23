@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { DAY_PLANS } from '../data/program'
 import { averageTargets, bmr, GOAL_LABEL } from '../engine/nutrition'
 import type { DayType, GoalMode } from '../engine/types'
@@ -11,17 +11,26 @@ export function Settings({ state, update }: ViewProps) {
   const p = state.profile
   const setP = (patch: Partial<typeof p>) => update((s) => ({ ...s, profile: { ...s.profile, ...patch } }))
   const [showKey, setShowKey] = useState(false)
-  const fileRef = useRef<HTMLInputElement>(null)
+  const [backup, setBackup] = useState('')
+  const [backupMsg, setBackupMsg] = useState<string | null>(null)
   const avg = averageTargets(p)
   const lowerDays = p.schedule.filter((t) => DAY_PLANS[t].isLowerBody).length
 
-  const download = () => {
-    const blob = new Blob([exportState(state)], { type: 'application/json' })
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = `hourglass-backup-${new Date().toISOString().slice(0, 10)}.json`
-    a.click()
-    URL.revokeObjectURL(a.href)
+  const copyBackup = () => {
+    const text = exportState(state)
+    setBackup(text)
+    const blocked = () => setBackupMsg('Copy was blocked — select the text below and copy it manually.')
+    if (!navigator.clipboard) return blocked()
+    navigator.clipboard.writeText(text).then(() => setBackupMsg('Backup copied. Paste it into a note or email to yourself.'), blocked)
+  }
+  const restore = () => {
+    try {
+      const next = importState(backup, state)
+      update(() => next)
+      setBackupMsg('Backup restored.')
+    } catch {
+      setBackupMsg('That text is not a valid backup. Paste the full text you copied earlier.')
+    }
   }
 
   return (
@@ -65,7 +74,7 @@ export function Settings({ state, update }: ViewProps) {
 
       <div className="card">
         <h3>AI coach (optional)</h3>
-        <p className="small muted">Paste an Anthropic API key to let the coach answer any question with your full data. The key is stored only in this browser and sent only to the Anthropic API. Without it, the offline coach handles common questions.</p>
+        <p className="small muted">Paste an Anthropic API key to let the coach answer any question with your full data. The key is stored only in this browser and sent only to the Anthropic API. Without it, the offline coach handles common questions. The hosted web version can't reach the API, so the full coach only works when you run the app yourself (npm run dev).</p>
         <div className="row" style={{ flexWrap: 'nowrap' }}>
           <input type={showKey ? 'text' : 'password'} value={p.apiKey ?? ''} placeholder="sk-ant-…" onChange={(e) => setP({ apiKey: e.target.value.trim() || undefined })} />
           <button className="btn sm" onClick={() => setShowKey((s) => !s)}>{showKey ? 'Hide' : 'Show'}</button>
@@ -79,21 +88,16 @@ export function Settings({ state, update }: ViewProps) {
 
       <div className="card flat">
         <h3>Data</h3>
-        <p className="small muted">Everything lives on this device. Export a backup regularly (photos are not included; the API key is never exported).</p>
+        <p className="small muted">Everything lives in this browser on this device. Copy a backup regularly and keep it somewhere safe (photos are not included; the API key is never copied).</p>
         <div className="row">
-          <button className="btn" onClick={download}>Export backup</button>
-          <button className="btn" onClick={() => fileRef.current?.click()}>Import backup</button>
-          <input ref={fileRef} type="file" accept="application/json" hidden onChange={async (e) => {
-            const f = e.target.files?.[0]
-            if (!f) return
-            try {
-              const next = importState(await f.text(), state)
-              update(() => next)
-            } catch {
-              alert('That file could not be read as a backup.')
-            }
-          }} />
+          <button className="btn" onClick={copyBackup}>Copy backup</button>
+          <button className="btn" disabled={!backup.trim()} onClick={restore}>Restore from pasted backup</button>
         </div>
+        {backupMsg && <p className="small">{backupMsg}</p>}
+        <label className="field" style={{ marginTop: 8 }}>
+          <span>Backup text (paste here to restore)</span>
+          <textarea id="backup-text" value={backup} onChange={(e) => setBackup(e.target.value)} />
+        </label>
       </div>
     </>
   )
