@@ -1,48 +1,84 @@
-# Lower-Body Hourglass
+# Taper
 
-A personal training, nutrition and progress app built around one goal: a **lower-body-dominant hourglass silhouette**. That means a small-looking upper body, shoulders kept as small as possible, a narrow waist, and fuller glutes, hips and thighs.
+A personal body recomposition tracker that works on your phone and offline. It covers food logging, meal timing, a 5-day training program with double progression, recovery and cycle context, weekly measurements and photos, and long-term trends. It is built to answer two questions:
 
-> Build the bottom while keeping the top small. Never build the top to "balance" the bottom.
+- **"What should I do today?"** (the Today tab)
+- **"Is my current diet and training actually moving me toward my goal?"** (the Progress tab and the weekly check-in)
 
-It runs entirely in the browser. Data stays on your device (localStorage, plus IndexedDB for photos). The optional AI coach sends your data only to the Anthropic API, and only when you add your own key.
+The goal is a narrower front-view waist, bigger and rounder glutes, visible abs, and staying properly nourished. Body weight is not the main measure, and no screen treats food as good or bad.
 
-## Use it on GitHub Pages
-
-Every push builds and deploys the app with `.github/workflows/pages.yml`. One-time setup: **Settings → Pages → Build and deployment → Source: GitHub Actions**. The app is then at `https://mgup709.github.io/gym/`.
-
-## Run it locally
+## Run it
 
 ```bash
 npm install
 npm run dev      # http://localhost:5173
 npm test         # engine tests (vitest)
 npm run build    # static build in dist/
+npm run e2e      # browser test of the core workflows (after build; uses the preinstalled Chromium)
 ```
 
-## What's inside
+`.github/workflows/pages.yml` deploys `main` to GitHub Pages. To install it on a phone, open the page and choose "Add to Home Screen".
 
-| Screen | What it does |
-|---|---|
-| **Today** | Day type and objective, calorie/macro targets, next meal, workout list, steps, knee status, cycle phase, and shortcuts (Start workout · Log food · Log measurements · Knee check-in · Ask coach). |
-| **Train** | For each exercise: purpose, sets × reps, RIR, rest, last session, today's target and knee demand. You log sets and a 0–5 knee response. A swap button keeps the same training effect, and each workout ends with deep-core exercises. |
-| **Body** | Proportion dashboard: front-view silhouette, descriptive ratios (hip ÷ waist, shoulder ÷ hip, …), priority measurements against the baseline, trends, measurement logging, and progress photos (front/side/back). |
-| **Food** | Macros for the day type, meals timed around your training time, quick-add of flavourful meals, and the week ahead. |
-| **Cycle** | Cycle sync: phase estimate, symptom logging, readiness, luteal-phase calorie adjustment, water-retention flags for measurements, and knee response by phase. |
-| **Weekly** | Lower-body scorecard (effective sets per muscle), the Lower-Body Width Engine, the weekly check-in, and the plan review. |
-| **Coach** | Claude, with full context from your data. Without an API key, a rule-based offline coach answers the common questions. |
-| **Knees** | Knee check-ins, red-flag advice, and the knee-tolerance memory (per-exercise glute/quad stimulus, knee response and your preference). |
+## Architecture
 
-## How the engines decide
+| Layer | Where | Notes |
+|---|---|---|
+| UI | `src/views/*`, `src/components/*` | React 19 + TypeScript, Tailwind v4, shadcn-style primitives (`components/ui`), Recharts, lucide icons. Hash routing, so the back gesture works in the installed app. |
+| Data | `src/lib/db.ts` | IndexedDB via Dexie. Local-first, with `navigator.storage.persist()` requested so the browser doesn't clear it. |
+| Writes | `src/lib/repo.ts` | Enforces the rules that protect history (below). |
+| Engines | `src/lib/*.ts` | Pure functions with unit tests: `nutrition`, `progression`, `mealtiming`, `suggest`, `trends`, `review`, `recovery`, `cycle`, `measurements`, `insights`. |
+| Seed data | `src/lib/seed-foods.ts`, `seed-program.ts`, `seed.ts` | Your regular foods, recipes, meal templates, program, baseline measurements and strength benchmarks. |
+| PWA | `public/manifest.webmanifest`, `public/sw.js` | Installable. Offline shell; data never leaves the device. |
 
-- **Program** (`src/data/program.ts`): Glutes + hamstrings / upper maintenance + core / recovery / glutes + thighs / glute accessory + core / optional / rest. The priority order shows up in weekly volume: glute max ≈ 24 sets, upper/side glutes ≈ 17, hamstrings ≈ 14, adductors ≈ 7.5, quads ≈ 7, deltoids ≈ 0.5. Lateral raises, overhead pressing and shrugs are never programmed; they're in the library only so the coach can explain why.
-- **Progression** (`src/engine/progression.ts`): double progression. Add reps until every set reaches the top of the range, then add load. Knee response of 2+, poor form, cycle symptoms or fatigue hold progression, and knee response of 4+ reduces the load. Upper-body progression is conservative, because maintenance counts as success there.
-- **Knee memory and substitution** (`src/engine/knee.ts`): an exercise with repeated 3+/5 knee scores is automatically replaced by one that trains the same target muscles. The replacement is ranked on knee demand, your history and your preference, and comes with an explanation (original purpose, why it changed, the replacement, what it still trains). A "modify today" knee check-in swaps out knee-dominant work for that day. Swelling, instability, or persistent or worsening pain triggers a recommendation to get a professional assessment.
-- **Nutrition** (`src/engine/nutrition.ts`): Mifflin-St Jeor with a modest deficit, never below about 1.2× BMR. Protein is the same every day. Carbs shift toward lower-body days while the weekly total stays balanced.
-- **Cycle sync** (`src/engine/cycle.ts`): evidence doesn't support rigid phase-based programming, so the plan itself doesn't change. What changes: symptoms can hold progression for a day, the luteal phase gets a small calorie bump, and measurements taken in water-retention windows are flagged. With hormonal contraception it switches to symptom-only mode.
-- **Plan review** (`src/engine/adjust.ts`): if the waist is down, glutes and thighs are steady or up, and shoulders are steady, it changes nothing. If shoulders are growing, it runs an immediate upper-body audit. If the lower body is flat, it works through a checklist in this order: progression, volume, effort, exercise selection, protein, calories, carbs, sleep, recovery, consistency.
+**Rules that protect history**
 
-None of the metrics are beauty or attractiveness scores. Muscle can't change pelvic bone width, only the muscular fullness around it.
+- Every date stores the targets that applied that day (`DayLog.targets`). Changing targets later only affects today and future days.
+- Food entries store their own copy of the nutrition values. Editing a food updates the recipes and meals that use it, but not days you already logged.
+- Daily totals are always recomputed from the entries, so editing or deleting an old entry updates that day immediately.
+- Days you haven't logged, or have marked incomplete, are left out of averages rather than counted as zero.
 
-## Baseline
+## Spec audit (QA checklist)
 
-Your baseline measurements (Sept 2026) are in `src/data/baseline.ts`: 15.5 in shoulders → 9.75 in waist → 13.75 in hips (front width), and 35 / 28 / 37 in (circumference).
+✅ implemented · 🟡 partial · ❌ missing
+
+| # | Area | Status | Notes |
+|---|---|---|---|
+| 1–3 | Philosophy, goals, health constraints | ✅ | Neutral wording throughout. No "cheat", "failed" or "burned off". No calories-from-exercise and nothing to "eat back". |
+| 4–5 | Baseline and primary variables | ✅ | All baseline circumferences and front widths are seeded as the baseline measurement. |
+| 6–14 | Program (Mon Lower A · Tue Upper · Wed Core · Thu Lower B · Fri Glute + dance) | ✅ | Every lower-body exercise has **Pain / discomfort**. Pain in 2 of the last 3 sessions flags the exercise and suggests alternatives (swap for one session or permanently). |
+| 7 | Strength baseline | ✅ | Hip thrust 130×9, RDL 74×9, abduction 85×10×3, face pull 20×12×3, curl 10×12×3 pre-fill the first session. |
+| 15 | Double progression | ✅ | Keep the load and add reps → add load once every set reaches the top of the range at the planned RIR. Pain holds progression. Reaching the top while grinding means repeat before adding load. Two sessions below the range suggest a small reduction. |
+| 16 | Rest periods | ✅ | A rest timer starts when a set is marked done (based on the exercise's rest time), with +30 s and skip. |
+| 17–21 | Targets per day type, as ranges | ✅ | Editable. Optional "steady intake" mode. Rest-day carbs fill the remaining calories. |
+| 22–24 | Meal timing | ✅ | Adapts to wake time, training time (10 AM / 4 PM / 7 PM patterns) and the Friday dance. Shows the next meal and what to aim for. |
+| 25–26 | Micronutrients and whole-food goals | ✅ | Tracked on the Food tab (today and 7-day average) and in trends; not on the Today screen. Fruit, vegetable and calcium-rich servings. |
+| 27–41 | Your regular foods | ✅ | Pancakes (calculated from ingredients: ~239 kcal, 28 g protein), both Oats Overnight flavours with soy milk, eggs + sourdough, both Chobani yogurts, yogurt + fruit, the Creami, fruit, poke bowl (light/white rice, extra salmon or edamame, extra or no mayo), Jersey Mike's bowl, pasta recipes, baked tomatoes, sauces and oils, and seafood meal ideas. |
+| 42–43 | "What should I eat next?" | ✅ | Suggests 2–4 foods from your own library using the time, training time, what you've already eaten, remaining macros, fiber, fruit and hunger. Shows only stored values. |
+| 44–45 | Quick Log checkboxes | ✅ | Tap logs a real entry, tap again removes it (with Undo). The stepper changes the quantity instead of creating a duplicate. |
+| 46–47 | Saved meals, recipes, favorites, recent, frequent, duplicate meal/day, custom foods | ✅ | "Frequently eaten" is ranked from your real logs (7 days, 30 days, time of day). |
+| 48, 76, 87 | Today dashboard | ✅ | No measurements, photo prompts or long-term charts. |
+| 49 | Workout logging | ✅ | Last session's sets and the suggested load pre-fill. "+N total reps vs last session". Summary shows duration, volume, load and rep PRs, and next-time suggestions. Finished sessions can be edited. |
+| 50–51 | Recovery and trend warnings | ✅ | Private 1–5 ratings plus binge/loss-of-control levels. A 14-day vs prior-14-day trend check shows a gentle card on Today when intake or recovery may be too aggressive. |
+| 52 | Cycle | ✅ | Optional. Cycle day comes from logged period starts. Measurements show their cycle day, a same-phase comparison is shown, and the retention window holds the weekly decision. |
+| 53–54 | Weekly measurements and ratios | ✅ | Three required measures plus optional ones and front widths. ±0.25 buttons start from last week's value, so entry takes about a minute. Compared against baseline, last week, 4 weeks ago and the start of the month. Changes under 0.25 in show as ±0. |
+| 55–56 | Progress photos | ✅ | Front, side, back and other side. Weekly or every 4 weeks. Last photo shown faintly as a pose guide. Side-by-side, swipe and overlay comparisons. Private (IndexedDB). No scoring. |
+| 57–63 | Nutrition trend charts | ✅ | Daily bars, 7-day average line, optional 30-day average, target band. 7d/30d/3m/6m/1y/All; longer ranges use weekly or monthly averages. Tap a day to open it. |
+| 64–66 | Monthly summaries, month vs month, intake by day type | ✅ | |
+| 67 | Nutrition + physique | ✅ | Small charts on a shared weekly axis (no dual axes), plus "the intake at which your waist trended down while strength held", described as co-occurring, not causal. |
+| 68 | Consistency calendar | ✅ | P/W/F/R letters, and calories shown as neutral below/within/above marks. |
+| 69 | Insights | ✅ | Each insight appears only once the data supports it (minimum-day thresholds). |
+| 70–72 | Weekly check-in and decision engine | ✅ | Four outcomes. Needs about 3 weeks of data. Recovery problems take priority. Cycle or one-off jumps lead to Hold. Never changes targets automatically: applying ±100 kcal is always your choice. |
+| 73–74 | Oct 31 and Dec 25 checkpoints | ✅ | Objective stats plus your own ratings. No required waist number. |
+| 75–80 | Navigation, tabs, settings | ✅ | Settings cover targets, schedule and times, a workout editor with custom exercises, Quick Log contents and order, measurement day, photo frequency, units, theme, cycle and checkpoints. |
+| 81–82 | Data model, export | ✅ | CSV zip (daily nutrition with that day's targets, food log, foods, meals, workouts, sets, measurements, recovery, cycle, reviews), JSON backup (optionally with photos), and restore. |
+| 83 | Tech stack | 🟡 | Kept **Vite** instead of Next.js: a static, local-first PWA fits GitHub Pages hosting and doesn't need a server. UI components are written in shadcn style rather than installed with its CLI. |
+| 83 | Supabase cloud sync | ❌ | Not built — the local-first path was chosen. Use JSON backup/restore to move between devices. |
+| 84 | PWA | ✅ | Manifest, icons, service worker, offline shell. |
+| 80 | Notifications | 🟡 | The weekly check-in shows as a dot on Progress. The device notification fires when you open the app on measurement day. There are no background pushes, because there is no server. |
+
+**Estimates to check against your labels.** Oats Overnight packets, Core Power, ISO100, the Good Culture serving, and the restaurant bowls are typical-label or USDA estimates. They carry an "Estimated" tag. Edit a food once and every recipe and meal that uses it updates.
+
+## Automated tests
+
+- `src/test/engine.test.ts` (28 tests): recipe math, history snapshots and target changes, edit behaviour, add-ons and modifiers, double progression, pain flags and PRs, the meal-timing examples from the spec, suggestions, moving averages, all four weekly decision outcomes, cycle day, and the zip CRC.
+- `scripts/e2e.mjs`: runs in a real browser at phone size. Covers setup, quick log and uncheck and undo, the no-duplicate stepper, a customized poke bowl, suggestions, workout set, rest timer and summary, and the weekly check-in and recommendation. It also fails on any console error.

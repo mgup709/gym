@@ -1,151 +1,269 @@
+import { useLiveQuery } from 'dexie-react-hooks'
+import { ChevronLeft, ChevronRight, Copy, Plus, Search, Sparkles, Star } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { buildToday, dayTypeFor } from '../engine/plan'
-import { applyCycle, averageTargets, dayKind, dayTargets, GOAL_LABEL } from '../engine/nutrition'
-import { cycleGuidance, cycleStatus, readiness } from '../engine/cycle'
-import { addDays, formatDate } from '../engine/dates'
-import { DAY_TYPE_LABEL } from '../data/program'
-import type { FoodItem } from '../engine/types'
-import { uid } from '../store'
-import type { ViewProps } from '../ui/common'
+import { DayMeals } from '@/components/food/DayMeals'
+import { FoodEditor } from '@/components/food/FoodEditor'
+import { FoodPicker } from '@/components/food/FoodPicker'
+import { NutritionSummary } from '@/components/food/NutritionSummary'
+import { QuickLog } from '@/components/food/QuickLog'
+import { SuggestSheet } from '@/components/food/SuggestSheet'
+import { useDay } from '@/components/food/useDay'
+import { Button } from '@/components/ui/button'
+import { Card, CardHeader, Empty, Pill, Section } from '@/components/ui/card'
+import { Chip, Switch } from '@/components/ui/controls'
+import { toast } from '@/components/ui/toast'
+import { addDays, fmtDate, nowHM, toMin } from '@/lib/dates'
+import { db } from '@/lib/db'
+import { navigate, useRoute, useSettings, useToday } from '@/lib/hooks'
+import { DAY_TYPE_LABEL, MICRO_INFO } from '@/lib/nutrition'
+import { copyEntries, ensureDay, entriesFor } from '@/lib/repo'
+import { frequentFoods, recentFoods } from '@/lib/trends'
+import type { FoodItem } from '@/lib/types'
+import { MICROS } from '@/lib/types'
+import { cn, fmtNum, mean } from '@/lib/utils'
+import { danceTimeFor, trainingTimeFor } from './Today'
 
-/** Rough macros for quick-add. Edit after adding if your portion differs. */
-const QUICK: Omit<FoodItem, 'id' | 'meal'>[] = [
-  { name: 'Cottage-cheese protein pancakes (3) + berries + syrup', kcal: 450, protein: 35, carbs: 55, fat: 9 },
-  { name: 'Overnight oats with whey + banana', kcal: 480, protein: 35, carbs: 65, fat: 9 },
-  { name: 'Skyr (200 g) + granola + honey', kcal: 380, protein: 25, carbs: 55, fat: 6 },
-  { name: '3 eggs + sourdough + feta', kcal: 450, protein: 27, carbs: 35, fat: 22 },
-  { name: 'Chicken rice bowl with garlic yogurt sauce', kcal: 620, protein: 45, carbs: 75, fat: 14 },
-  { name: 'Carnitas burrito bowl', kcal: 700, protein: 42, carbs: 80, fat: 22 },
-  { name: 'Turkey pesto sandwich', kcal: 520, protein: 35, carbs: 50, fat: 18 },
-  { name: 'Chicken pasta arrabbiata + parmesan', kcal: 680, protein: 45, carbs: 85, fat: 15 },
-  { name: 'Salmon, lemon orzo, roasted veg', kcal: 650, protein: 40, carbs: 60, fat: 25 },
-  { name: 'Greek yogurt + banana + honey (pre-workout)', kcal: 280, protein: 20, carbs: 45, fat: 2 },
-  { name: 'Protein shake', kcal: 140, protein: 25, carbs: 4, fat: 2 },
-  { name: 'Bagel + turkey + light cream cheese', kcal: 400, protein: 25, carbs: 55, fat: 8 },
-  { name: 'Dessert: ice cream (1 cup)', kcal: 280, protein: 5, carbs: 32, fat: 14 },
-  { name: 'Restaurant meal (estimate)', kcal: 900, protein: 40, carbs: 90, fat: 40 },
-]
+type LibTab = 'frequent' | 'favorites' | 'meals' | 'recipes' | 'recent' | 'all'
 
-export function Food({ state, update, today, go }: ViewProps) {
-  const plan = useMemo(() => buildToday(state, today), [state, today])
-  const items = state.food[today] ?? []
-  const [meal, setMeal] = useState(plan.meals.find((m) => m.name !== 'Workout')?.name ?? 'Meal')
-  const [custom, setCustom] = useState({ name: '', kcal: '', protein: '', carbs: '', fat: '' })
-  const tot = items.reduce((a, f) => ({ kcal: a.kcal + f.kcal, protein: a.protein + f.protein, carbs: a.carbs + f.carbs, fat: a.fat + f.fat }), { kcal: 0, protein: 0, carbs: 0, fat: 0 })
-  const t = plan.macros
-  const add = (f: Omit<FoodItem, 'id' | 'meal'>) => update((s) => ({ ...s, food: { ...s.food, [today]: [...(s.food[today] ?? []), { ...f, id: uid(), meal }] } }))
-  const remove = (id: string) => update((s) => ({ ...s, food: { ...s.food, [today]: (s.food[today] ?? []).filter((f) => f.id !== id) } }))
+export function FoodView() {
+  const settings = useSettings()
+  const today = useToday()
+  const route = useRoute()
+  const date = route.query.get('date') ?? today
+  const setDate = (d: string) => navigate(d === today ? 'food' : `food?date=${d}`, true)
+  const data = useDay(date, settings)
+  const [addOpen, setAddOpen] = useState(false)
+  const [suggestOpen, setSuggestOpen] = useState(false)
+  const [editor, setEditor] = useState<{ open: boolean; food?: FoodItem; kind?: FoodItem['kind'] }>({ open: false })
+  const [tab, setTab] = useState<LibTab>('frequent')
+  const [searchOpen, setSearchOpen] = useState(false)
+  const foods = useLiveQuery(() => db.foods.toArray(), [])
+  const history = useLiveQuery(() => db.entries.where('date').aboveOrEqual(addDays(today, -60)).toArray(), [today])
+  const week = useLiveQuery(async () => {
+    const es = await db.entries.where('date').between(addDays(date, -6), date, true, true).toArray()
+    return es
+  }, [date])
 
-  const avg = averageTargets(state.profile)
-  const week = avg
-    ? Array.from({ length: 7 }, (_, i) => {
-        const d = addDays(today, i)
-        const type = dayTypeFor(state, d)
-        const cs = cycleStatus(state.cycle, d)
-        const g = cycleGuidance(cs, readiness(undefined))
-        return { d, type, m: applyCycle(dayTargets(avg, state.profile.schedule, type), g.kcalDelta, g.carbDeltaG) }
-      })
-    : []
+  const libList = useMemo(() => {
+    if (!foods || !history) return []
+    const live = foods.filter((f) => !f.archived)
+    const map = new Map(live.map((f) => [f.id, f]))
+    switch (tab) {
+      case 'frequent':
+        return frequentFoods(history, today, toMin(nowHM())).slice(0, 15).map((x) => map.get(x.foodId)).filter((f): f is FoodItem => !!f)
+      case 'recent':
+        return recentFoods(history, 20).map((x) => map.get(x.foodId)).filter((f): f is FoodItem => !!f)
+      case 'favorites':
+        return live.filter((f) => f.favorite)
+      case 'meals':
+        return live.filter((f) => f.kind === 'meal')
+      case 'recipes':
+        return live.filter((f) => f.kind === 'recipe')
+      default:
+        return [...foods].sort((a, b) => a.name.localeCompare(b.name))
+    }
+  }, [foods, history, tab, today])
+
+  if (!settings || !data) return null
+  const isToday = date === today
+  const t = data.totals
+
+  const dupYesterday = async () => {
+    const y = await entriesFor(addDays(date, -1))
+    if (!y.length) return toast('Nothing logged the day before')
+    const copies = await copyEntries(y, date)
+    toast(`Copied ${copies.length} entries from the day before`, () => db.entries.bulkDelete(copies.map((c) => c.id)))
+  }
+
+  // Weekly micronutrient averages over logged days
+  const weekByDate = new Map<string, number>()
+  for (const e of week ?? []) weekByDate.set(e.date, 1)
+  const weekDays = weekByDate.size
 
   return (
-    <>
-      <h2>Nutrition</h2>
-      {!t ? (
-        <div className="note warn">Add weight and age in <button className="btn ghost sm" onClick={() => go('settings')}>Settings</button> to calculate targets.</div>
-      ) : (
-        <div className="card accent">
-          <div className="row between">
-            <span className="eyebrow">{dayKind(plan.day.type) === 'lower' ? 'Lower-body day · highest carbs' : dayKind(plan.day.type) === 'upper' ? 'Upper maintenance day' : 'Rest / recovery day'}</span>
-            <span className="pill">{GOAL_LABEL[state.profile.goalMode]}</span>
-          </div>
-          {(['kcal', 'protein', 'carbs', 'fat'] as const).map((k) => (
-            <div key={k} style={{ margin: '8px 0' }}>
-              <div className="row between small"><strong>{k === 'kcal' ? 'Calories' : k[0].toUpperCase() + k.slice(1) + ' (g)'}</strong><span>{Math.round(tot[k])} / {t[k]}</span></div>
-              <div className={`bar ${tot[k] >= t[k] * 0.9 ? 'good' : ''}`}><i style={{ width: `${Math.min(100, (tot[k] / t[k]) * 100)}%` }} /></div>
-            </div>
-          ))}
-          {plan.cycleGuide.kcalDelta > 0 && <p className="tiny muted">{plan.cycleGuide.nutrition}</p>}
-          <p className="tiny muted">Protein stays the same every day. Carbs shift toward glute/leg days; weekly calories stay balanced.</p>
+    <div className="space-y-4">
+      <header className="flex items-center justify-between pt-2">
+        <div>
+          <p className="text-sm text-ink-3">{isToday ? 'Today' : fmtDate(date, { weekday: 'long' })}</p>
+          <h1 className="font-display text-4xl leading-tight">Food</h1>
         </div>
-      )}
-
-      <div className="card">
-        <h3>Meal timing</h3>
-        <label className="field">
-          <span>What time are you training?</span>
-          <input type="time" value={state.profile.trainingTime} onChange={(e) => update((s) => ({ ...s, profile: { ...s.profile, trainingTime: e.target.value } }))} />
-        </label>
-        {plan.meals.map((m) => (
-          <div key={m.name} className={`note ${m.name === 'Workout' ? 'info' : ''}`}>
-            <div className="row between"><strong>{m.time} · {m.name}</strong>
-              {t && m.name !== 'Workout' && <span className="tiny muted">~P {Math.round(t.protein * m.share.protein)} · C {Math.round(t.carbs * m.share.carbs)} · F {Math.round(t.fat * m.share.fat)} g</span>}
-            </div>
-            <div className="small">{m.focus}</div>
-            {m.ideas.length > 0 && <details><summary>Ideas</summary><ul className="small" style={{ margin: 0 }}>{m.ideas.map((i) => <li key={i}>{i}</li>)}</ul></details>}
-          </div>
-        ))}
-      </div>
-
-      <div className="card">
-        <h3>Log food</h3>
-        <label className="field">
-          <span>Meal</span>
-          <select value={meal} onChange={(e) => setMeal(e.target.value)}>
-            {plan.meals.filter((m) => m.name !== 'Workout').map((m) => <option key={m.name}>{m.name}</option>)}
-            <option>Snack</option>
-          </select>
-        </label>
-        <details open>
-          <summary>Quick add</summary>
-          <div className="chips">
-            {QUICK.map((q) => <button key={q.name} className="chip" onClick={() => add(q)}>{q.name} · {q.kcal}</button>)}
-          </div>
-        </details>
-        <div className="divider" />
-        <div className="grid2">
-          <label className="field"><span>Food</span><input type="text" value={custom.name} onChange={(e) => setCustom({ ...custom, name: e.target.value })} /></label>
-          <label className="field"><span>kcal</span><input type="number" value={custom.kcal} onChange={(e) => setCustom({ ...custom, kcal: e.target.value })} /></label>
+        <div className="flex items-center gap-1">
+          <Button size="icon-sm" variant="ghost" onClick={() => setDate(addDays(date, -1))} aria-label="Previous day">
+            <ChevronLeft className="size-5" />
+          </Button>
+          <label className="relative">
+            <span className="rounded-full bg-surface-2 px-3 py-1.5 text-sm font-medium">{fmtDate(date)}</span>
+            <input type="date" value={date} max={today} onChange={(e) => e.target.value && setDate(e.target.value)} className="absolute inset-0 opacity-0" aria-label="Pick date" />
+          </label>
+          <Button size="icon-sm" variant="ghost" onClick={() => setDate(addDays(date, 1))} disabled={isToday} aria-label="Next day">
+            <ChevronRight className="size-5" />
+          </Button>
         </div>
-        <div className="grid3">
-          <label className="field"><span>Protein g</span><input type="number" value={custom.protein} onChange={(e) => setCustom({ ...custom, protein: e.target.value })} /></label>
-          <label className="field"><span>Carbs g</span><input type="number" value={custom.carbs} onChange={(e) => setCustom({ ...custom, carbs: e.target.value })} /></label>
-          <label className="field"><span>Fat g</span><input type="number" value={custom.fat} onChange={(e) => setCustom({ ...custom, fat: e.target.value })} /></label>
-        </div>
-        <button className="btn primary" disabled={!custom.name} onClick={() => {
-          add({ name: custom.name, kcal: +custom.kcal || 0, protein: +custom.protein || 0, carbs: +custom.carbs || 0, fat: +custom.fat || 0 })
-          setCustom({ name: '', kcal: '', protein: '', carbs: '', fat: '' })
-        }}>Add</button>
+      </header>
 
-        {items.length > 0 && (
-          <table className="data" style={{ marginTop: 10 }}>
-            <thead><tr><th>Food</th><th className="num">kcal</th><th className="num">P</th><th className="num">C</th><th className="num">F</th><th /></tr></thead>
-            <tbody>
-              {items.map((f) => (
-                <tr key={f.id}>
-                  <td><div>{f.name}</div><div className="tiny muted">{f.meal}</div></td>
-                  <td className="num">{f.kcal}</td><td className="num">{f.protein}</td><td className="num">{f.carbs}</td><td className="num">{f.fat}</td>
-                  <td><button className="btn ghost sm" onClick={() => remove(f.id)}>✕</button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <Card>
+        <CardHeader
+          title={`${DAY_TYPE_LABEL[data.day.dayType]} · daily totals`}
+          subtitle={!isToday ? 'Targets shown are the ones saved for this date' : undefined}
+          action={!isToday ? <Button size="xs" variant="secondary" onClick={() => setDate(today)}>Today</Button> : undefined}
+        />
+        <NutritionSummary data={data} />
+        <div className="mt-3 flex flex-wrap gap-1.5 text-xs">
+          <Pill tone={t.fruit >= settings.wholeFood.fruit ? 'sage' : 'neutral'}>Fruit {fmtNum(t.fruit, 1)}/{settings.wholeFood.fruit}</Pill>
+          <Pill tone={t.veg >= settings.wholeFood.veg ? 'sage' : 'neutral'}>Veg {fmtNum(t.veg, 1)}/{settings.wholeFood.veg}</Pill>
+          <Pill tone={t.calciumServ >= settings.wholeFood.calcium ? 'sage' : 'neutral'}>Calcium-rich {fmtNum(t.calciumServ, 1)}/{settings.wholeFood.calcium}</Pill>
+        </div>
+        {isToday && (
+          <Button variant="soft" className="mt-4 w-full" onClick={() => setSuggestOpen(true)}>
+            <Sparkles className="size-4" /> What should I eat next?
+          </Button>
         )}
-      </div>
+      </Card>
 
-      {week.length > 0 && (
-        <div className="card flat">
-          <h4>Week ahead</h4>
-          <table className="data">
-            <thead><tr><th>Day</th><th>Session</th><th className="num">kcal</th><th className="num">C</th><th className="num">F</th></tr></thead>
-            <tbody>
-              {week.map((w) => (
-                <tr key={w.d}><td>{formatDate(w.d)}</td><td className="small">{DAY_TYPE_LABEL[w.type]}</td><td className="num">{w.m.kcal}</td><td className="num">{w.m.carbs}</td><td className="num">{w.m.fat}</td></tr>
-              ))}
-            </tbody>
-          </table>
-          <p className="tiny muted">Protein: {avg?.protein} g every day. Restaurant meals, sauces and desserts all fit — the weekly balance matters most.</p>
+      <Card>
+        <CardHeader
+          title="Meals"
+          action={
+            <div className="flex gap-1.5">
+              <Button size="xs" variant="ghost" onClick={dupYesterday}>
+                <Copy className="size-3.5" /> Day before
+              </Button>
+              <Button size="xs" variant="secondary" onClick={() => setAddOpen(true)}>
+                <Plus className="size-3.5" /> Add
+              </Button>
+            </div>
+          }
+        />
+        <DayMeals date={date} entries={data.entries} />
+      </Card>
+
+      <Section title="Quick log" subtitle="One tap for your regular foods" defaultOpen>
+        <QuickLog date={date} entries={data.entries} groups={['breakfast', 'snacks', 'meals', 'sides', 'fruit', 'extras']} />
+      </Section>
+
+      <Section title="Micronutrients" subtitle={`Today, and the ${weekDays}-day average — weekly patterns matter more than any single day`}>
+        <MicroTable date={date} todayMicros={t.micros ?? {}} weekEntries={week ?? []} weekDays={weekDays} targets={settings.microTargets} />
+        <p className="text-xs text-ink-3">Only foods with stored micronutrient data count, so totals can read low. Add values to custom foods to improve coverage.</p>
+      </Section>
+
+      <Section title="Your foods" subtitle="Favorites, saved meals, recipes and custom foods">
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" className="flex-1" onClick={() => setSearchOpen(true)}>
+            <Search className="size-4" /> Search &amp; log
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setEditor({ open: true, kind: 'food' })}>
+            <Plus className="size-4" /> Food
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setEditor({ open: true, kind: 'recipe' })}>
+            <Plus className="size-4" /> Recipe
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setEditor({ open: true, kind: 'meal' })}>
+            <Plus className="size-4" /> Meal
+          </Button>
         </div>
+        <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 sm:-mx-5 sm:px-5">
+          {(['frequent', 'favorites', 'meals', 'recipes', 'recent', 'all'] as LibTab[]).map((x) => (
+            <Chip key={x} active={tab === x} onClick={() => setTab(x)}>
+              {{ frequent: 'Frequently eaten', favorites: 'Favorites', meals: 'Saved meals', recipes: 'Recipes', recent: 'Recent', all: 'All foods' }[x]}
+            </Chip>
+          ))}
+        </div>
+        {libList.length === 0 ? (
+          <Empty>{tab === 'frequent' || tab === 'recent' ? 'This fills in from what you actually log.' : 'Nothing here yet.'}</Empty>
+        ) : (
+          <ul className="divide-y divide-border">
+            {libList.map((f) => (
+              <li key={f.id}>
+                <button className={cn('flex w-full items-center gap-2 py-2 text-left', f.archived && 'opacity-50')} onClick={() => setEditor({ open: true, food: f })}>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm">
+                      {f.favorite && <Star className="mr-1 inline size-3.5 fill-accent text-accent" />}
+                      {f.name}
+                    </div>
+                    <div className="text-xs text-ink-3 tabular-nums">
+                      {f.serving} · {fmtNum(f.nutrients.kcal)} kcal · {fmtNum(f.nutrients.protein)} P · {fmtNum(f.nutrients.carbs)} C · {fmtNum(f.nutrients.fat)} F
+                      {f.kind !== 'food' && ` · ${f.kind}`}
+                      {f.archived && ' · hidden'}
+                    </div>
+                  </div>
+                  <ChevronRight className="size-4 text-ink-3" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="text-xs text-ink-3">Editing a food updates recipes and meals that use it. Days you already logged keep their original values.</p>
+      </Section>
+
+      <Section title="This day">
+        <Switch
+          checked={!!data.day.excluded}
+          onChange={async (v) => {
+            const d = await ensureDay(date)
+            await db.days.put({ ...d, excluded: v })
+          }}
+          label="Incomplete log — leave out of averages"
+          hint="Use this for days you didn't fully log so trends stay accurate."
+        />
+      </Section>
+
+      <FoodPicker open={addOpen} onClose={() => setAddOpen(false)} date={date} />
+      <FoodPicker open={searchOpen} onClose={() => setSearchOpen(false)} date={date} initialTab="all" />
+      <FoodEditor open={editor.open} food={editor.food} kind={editor.kind} onClose={() => setEditor({ open: false })} />
+      {isToday && (
+        <SuggestSheet
+          open={suggestOpen}
+          onClose={() => setSuggestOpen(false)}
+          date={date}
+          day={data.day}
+          entries={data.entries}
+          settings={settings}
+          training={trainingTimeFor(settings, date, data.day.workoutTime, data.day.dayType)}
+          dance={danceTimeFor(settings, date)}
+        />
       )}
-    </>
+    </div>
+  )
+}
+
+function MicroTable({ todayMicros, weekEntries, weekDays, targets }: { date: string; todayMicros: Partial<Record<string, number>>; weekEntries: import('@/lib/types').FoodEntry[]; weekDays: number; targets: Record<string, number> }) {
+  const byDay = new Map<string, Record<string, number>>()
+  for (const e of weekEntries) {
+    const d = byDay.get(e.date) ?? {}
+    for (const m of MICROS) {
+      const v = (e.per.micros?.[m] ?? 0) * e.qty + (e.addons ?? []).reduce((a, x) => a + (x.per.micros?.[m] ?? 0) * x.qty, 0)
+      d[m] = (d[m] ?? 0) + v
+    }
+    byDay.set(e.date, d)
+  }
+  return (
+    <div className="overflow-hidden rounded-2xl border border-border">
+      <table className="w-full text-sm">
+        <thead className="bg-surface-2 text-xs text-ink-3">
+          <tr>
+            <th className="px-3 py-2 text-left font-medium">Nutrient</th>
+            <th className="px-2 py-2 text-right font-medium">Today</th>
+            <th className="px-2 py-2 text-right font-medium">{weekDays}-day avg</th>
+            <th className="px-3 py-2 text-right font-medium">Target</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border">
+          {MICROS.map((m) => {
+            const avg = mean([...byDay.values()].map((d) => d[m] ?? 0))
+            const low = avg != null && avg < targets[m] * 0.7
+            return (
+              <tr key={m}>
+                <td className="px-3 py-1.5">{MICRO_INFO[m].label}</td>
+                <td className="px-2 py-1.5 text-right tabular-nums">{fmtNum(todayMicros[m] ?? 0, m === 'b12' || m === 'vitaminD' || m === 'iron' ? 1 : 0)}</td>
+                <td className={cn('px-2 py-1.5 text-right tabular-nums', low && 'text-amber')}>{fmtNum(avg, m === 'b12' || m === 'vitaminD' || m === 'iron' ? 1 : 0)}</td>
+                <td className="px-3 py-1.5 text-right text-ink-3 tabular-nums">
+                  {fmtNum(targets[m], 1)} {MICRO_INFO[m].unit}
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
   )
 }
