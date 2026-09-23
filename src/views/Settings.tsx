@@ -74,7 +74,7 @@ export function Settings({ state, update }: ViewProps) {
 
       <div className="card">
         <h3>AI coach (optional)</h3>
-        <p className="small muted">Paste an Anthropic API key to let the coach answer any question with your full data. The key is stored only in this browser and sent only to the Anthropic API. Without it, the offline coach handles common questions. The hosted web version can't reach the API, so the full coach only works when you run the app yourself (npm run dev).</p>
+        <p className="small muted">Paste an Anthropic API key to let the coach answer any question with your full data. The key is stored only in this browser and sent only to the Anthropic API. Without it, the offline coach handles common questions. This works on GitHub Pages or when you run the app yourself; the claude.ai-hosted copy can't reach the API.</p>
         <div className="row" style={{ flexWrap: 'nowrap' }}>
           <input type={showKey ? 'text' : 'password'} value={p.apiKey ?? ''} placeholder="sk-ant-…" onChange={(e) => setP({ apiKey: e.target.value.trim() || undefined })} />
           <button className="btn sm" onClick={() => setShowKey((s) => !s)}>{showKey ? 'Hide' : 'Show'}</button>

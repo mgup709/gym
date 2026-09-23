@@ -6,7 +6,11 @@ A personal training, nutrition and progress app built around one goal: a **lower
 
 It runs entirely in the browser. Data stays on your device (localStorage, plus IndexedDB for photos). The optional AI coach sends your data only to the Anthropic API, and only when you add your own key.
 
-## Run it
+## Use it on GitHub Pages
+
+Every push builds and deploys the app with `.github/workflows/pages.yml`. One-time setup: **Settings → Pages → Build and deployment → Source: GitHub Actions**. The app is then at `https://mgup709.github.io/gym/`.
+
+## Run it locally
 
 ```bash
 npm install

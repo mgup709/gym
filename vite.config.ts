@@ -7,6 +7,8 @@ const single = !!process.env.SINGLE_FILE
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  // Relative asset paths so the build works under any sub-path (e.g. GitHub Pages at /gym/).
+  base: './',
   build: single
     ? {
         outDir: 'dist-single',
