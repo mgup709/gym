@@ -64,6 +64,24 @@ try {
   await page.waitForTimeout(300)
   check((await text()).includes('Usual poke bowl'), 'Customized poke bowl logged')
 
+  // Edit a meal's default nutrition (manual totals)
+  await page.getByRole('button', { name: "Customize Usual Jersey Mike's bowl" }).click()
+  await page.getByRole('button', { name: /Edit default nutrition/ }).click()
+  await page.getByRole('switch').first().click()
+  const kcal = page.getByRole('dialog').last().locator('input[type=number]').first()
+  await kcal.fill('610')
+  await page.getByRole('button', { name: 'Save', exact: true }).click()
+  await page.waitForTimeout(300)
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(300)
+  check((await text()).includes('610 kcal'), "Editing Jersey Mike's bowl to 610 kcal updates the Quick Log")
+
+  // Apple Health import link
+  await page.goto('http://localhost:4179/#/import?workout=Traditional%20Strength%20Training&start=16:05&min=55&hr=128&sleep=7.5')
+  await page.getByRole('heading', { name: 'Today' }).waitFor()
+  await page.waitForTimeout(400)
+  check((await text()).includes('Traditional Strength Training · 55 min · avg HR 128'), 'Import link adds the Apple Watch workout to Today')
+
   // What should I eat next
   await page.getByRole('button', { name: /What should I eat next/ }).first().click()
   await page.getByText('Good options from your foods').waitFor()
@@ -76,7 +94,16 @@ try {
   await page.getByRole('button', { name: '3', exact: true }).first().click()
 
   // Workout
-  await page.getByRole('button', { name: /Start workout/ }).first().click().catch(() => {})
+  const startBtn = page.locator('main').getByRole('button', { name: /^Start workout$/ })
+  if (await startBtn.count()) await startBtn.first().click()
+  await page.waitForTimeout(300)
+  if (!page.url().includes('session')) {
+    // Dance night or rest day: start Monday's Lower A from the weekly program instead
+    await page.getByRole('button', { name: 'Workout', exact: true }).click()
+    await page.getByText('Weekly program').first().click()
+    await page.getByRole('button', { name: /Mon\s*Lower A/ }).click()
+    await page.getByRole('button', { name: 'Start this workout today' }).click()
+  }
   await page.waitForTimeout(400)
   await shot('workout-session')
   if ((await page.url()).includes('session')) {

@@ -2,13 +2,14 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { AlertTriangle, ArrowLeftRight, Check, ChevronLeft, ChevronRight, Info, Minus, Plus, Timer, Trophy } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { StrengthChart } from '@/components/charts/StrengthChart'
+import { ActivityList } from '@/components/health/Activities'
 import { Button } from '@/components/ui/button'
 import { Card, CardHeader, Empty, Pill, Section } from '@/components/ui/card'
 import { Chip } from '@/components/ui/controls'
 import { NumInput, Select, Textarea } from '@/components/ui/input'
 import { Sheet } from '@/components/ui/sheet'
 import { toast } from '@/components/ui/toast'
-import { DAY_NAMES, fmtDate, fmtDuration, weekday } from '@/lib/dates'
+import { addDays, DAY_NAMES, fmtDate, fmtDuration, weekday } from '@/lib/dates'
 import { db } from '@/lib/db'
 import { navigate, useRoute, useSettings, useToday } from '@/lib/hooks'
 import { bestE1RM, compareToLast, fmtSets, historyFor, kneeFlag, suggestNext } from '@/lib/progression'
@@ -196,6 +197,11 @@ function WorkoutHome() {
         )}
       </Section>
 
+      <Section title="Apple Watch & other activities" subtitle="Imported from Apple Health or logged by hand — last 30 days">
+        <ActivityList dates={[addDays(today, -29), today]} showDate />
+        <p className="text-xs text-ink-3">Set up the import in Settings → Apple Watch & Health. Calories burned are never imported or used to change food targets.</p>
+      </Section>
+
       <Section title="Exercise history">
         <ul className="divide-y divide-border">
           {exercises
@@ -377,14 +383,6 @@ function SessionView({ id }: { id?: string }) {
         )
       })}
 
-      {session.dayType === 'glute' && (
-        <Card>
-          <label className="flex items-center gap-3 text-sm">
-            <input type="checkbox" className="size-5 accent-[var(--accent)]" checked={!!session.extras?.dance} onChange={(e) => put({ ...session, extras: { ...session.extras, dance: e.target.checked } })} />
-            Salsa / bachata tonight (logged as activity only — no calorie estimate)
-          </label>
-        </Card>
-      )}
 
       <Card>
         <div className="mb-1.5 text-sm font-medium">Session notes</div>
@@ -660,6 +658,9 @@ function SummaryView({ id }: { id?: string }) {
           ))}
         </div>
         {session.extras?.dance && <p className="mt-3 text-sm text-sage">+ Salsa / bachata tonight</p>}
+        <div className="mt-3">
+          <ActivityList date={session.date} />
+        </div>
       </Card>
       <Card>
         <CardHeader title="PRs" />

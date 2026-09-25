@@ -1,6 +1,6 @@
 // Offline support: the app shell is cached on install; assets are cache-first (they're content-hashed);
 // navigations are network-first with the cached shell as fallback. All user data lives in IndexedDB.
-const CACHE = 'taper-v1'
+const CACHE = 'taper-v2'
 const SHELL = ['./', './index.html', './manifest.webmanifest', './favicon.svg', './icons/icon-192.png']
 
 self.addEventListener('install', (e) => {

@@ -31,6 +31,7 @@ export function scheduledTemplateId(settings: Settings, date: ISODate): string {
 export function dayTypeFromSchedule(settings: Settings, templates: WorkoutTemplate[], date: ISODate): DayType {
   const id = scheduledTemplateId(settings, date)
   if (id === 'rest') return 'rest'
+  if (id === 'dance') return 'dance'
   return templates.find((t) => t.id === id)?.dayType ?? 'rest'
 }
 

@@ -278,3 +278,80 @@ describe('zip', () => {
     expect(crc32(new TextEncoder().encode('123456789'))).toBe(0xcbf43926)
   })
 })
+
+describe('v2 program migration', () => {
+  beforeEach(async () => {
+    await db.delete()
+    await db.open()
+  })
+  it('moves an existing v1 install to the leg-hypertrophy week without touching past days', async () => {
+    const { migrate } = await import('@/lib/seed')
+    const { DEFAULT_TARGETS: T } = await import('@/lib/nutrition')
+    const s = defaultSettings('2026-09-20')
+    const v1 = { ...s, setupDone: true, baselineWeight: 137, programVersion: undefined, schedule: ['rest', 'lowerA', 'upper', 'core', 'lowerB', 'glute', 'rest'] }
+    const t = structuredClone(T) as Record<string, unknown>
+    delete t.lowerC
+    delete t.dance
+    ;(t.glute as { kcal: { min: number } }).kcal.min = 1990 // a user edit that should carry over to dance night
+    await db.settings.put({ ...v1, targets: t as typeof s.targets })
+    await db.templates.put({ id: 'glute', name: 'old', dayType: 'glute', goal: '', exercises: [] })
+    await db.days.put({ date: '2020-01-03', dayType: 'glute', targets: T.glute })
+    await migrate()
+    const m = (await db.settings.get('profile'))!
+    expect(m.baselineWeight).toBe(128)
+    expect(m.schedule).toEqual(['rest', 'lowerA', 'upper', 'lowerB', 'lowerC', 'dance', 'rest'])
+    expect(m.targets.dance.kcal.min).toBe(1990)
+    expect(m.targets.lowerC).toBeDefined()
+    expect(m.trainingTimes[5]).toBeNull()
+    expect(await db.templates.get('glute')).toBeUndefined()
+    expect((await db.templates.get('lowerC'))!.exercises.length).toBeGreaterThan(3)
+    expect((await db.days.get('2020-01-03'))!.dayType).toBe('glute')
+    // Friday is dance night with no workout template
+    const { dayTypeFromSchedule } = await import('@/lib/repo')
+    expect(dayTypeFromSchedule(m, await db.templates.toArray(), '2026-09-25')).toBe('dance')
+  })
+  it('glutes are trained 3x and quads at least 2x per week, with no lifting on dance night', () => {
+    const lower = SEED_TEMPLATES.filter((t) => ['lowerA', 'lowerB', 'lowerC'].includes(t.id))
+    expect(lower).toHaveLength(3)
+    const glute = ['hip-thrust', 'machine-hip-thrust', 'glute-bridge', 'cable-kickback', 'back-ext-45', 'abduction', 'bss', 'reverse-lunge']
+    for (const t of lower) expect(t.exercises.some((p) => glute.includes(p.exerciseId))).toBe(true)
+    const quadDays = lower.filter((t) => t.exercises.some((p) => ['leg-press', 'bss', 'reverse-lunge', 'leg-extension'].includes(p.exerciseId)))
+    expect(quadDays.length).toBeGreaterThanOrEqual(2)
+  })
+})
+
+describe('editable nutrition', () => {
+  it('a meal with manual totals uses them instead of the calculation', () => {
+    const lib = new Map(foods.map((f) => [f.id, f]))
+    const poke = { ...food('poke'), manual: true, nutrients: { kcal: 720, protein: 40, carbs: 80, fat: 25, fiber: 6 } }
+    const r = recomputeLibrary([...foods.filter((f) => f.id !== 'poke'), poke]).find((f) => f.id === 'poke')!
+    expect(r.nutrients.kcal).toBe(720)
+    expect(lib.get('poke')!.nutrients.kcal).not.toBe(720)
+  })
+})
+
+describe('Apple Health import', () => {
+  it('parses an import link with workouts, sleep and resting HR', async () => {
+    const { parseImportParams } = await import('@/lib/health')
+    const q = new URLSearchParams('date=2026-09-25&workout=Traditional Strength Training&start=16:05&min=1:02:30&hr=128&sleep=7:30&rhr=58&w=Dance~2026-09-25T20:00~118~135')
+    const r = parseImportParams(q, '2026-09-25')
+    expect(r.activities).toHaveLength(2)
+    expect(r.activities[0]).toMatchObject({ type: 'Traditional Strength Training', start: '16:05', minutes: 63, avgHR: 128 })
+    expect(r.activities[1]).toMatchObject({ type: 'Dance', start: '20:00', minutes: 118 })
+    expect(r.sleep).toEqual({ date: '2026-09-25', hours: 7.5 })
+    expect(r.restingHR?.value).toBe(58)
+  })
+  it('reads a workouts CSV by column names and does not duplicate on re-import', async () => {
+    await db.delete()
+    await db.open()
+    const { parseWorkoutCSV, applyImport } = await import('@/lib/health')
+    const csv = 'Workout Type,Start,End,Duration,Active Energy (kcal),Avg Heart Rate (bpm)\nTraditional Strength Training,2026-09-24 16:02:11,2026-09-24 17:00:00,00:57:49,210,121\nSocial Dance,2026-09-25 20:01:00,2026-09-25 22:00:00,01:59:00,450,133\n'
+    const acts = parseWorkoutCSV(csv)
+    expect(acts).toHaveLength(2)
+    expect(acts[0]).toMatchObject({ date: '2026-09-24', start: '16:02', minutes: 58, avgHR: 121 })
+    expect(Object.keys(acts[0])).not.toContain('kcal')
+    expect((await applyImport({ activities: acts })).added).toBe(2)
+    expect((await applyImport({ activities: parseWorkoutCSV(csv) })).updated).toBe(2)
+    expect(await db.activities.count()).toBe(2)
+  })
+})

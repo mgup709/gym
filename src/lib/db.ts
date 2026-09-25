@@ -1,5 +1,6 @@
 import Dexie, { type EntityTable } from 'dexie'
 import type {
+  Activity,
   CycleDay,
   DayLog,
   Exercise,
@@ -27,6 +28,7 @@ export class TaperDB extends Dexie {
   measurements!: EntityTable<Measurement, 'id'>
   photos!: EntityTable<Photo, 'id'>
   reviews!: EntityTable<WeeklyReview, 'id'>
+  activities!: EntityTable<Activity, 'id'>
 
   constructor(name = 'taper') {
     super(name)
@@ -44,6 +46,7 @@ export class TaperDB extends Dexie {
       photos: 'id, date, angle',
       reviews: 'id, date',
     })
+    this.version(2).stores({ activities: 'id, date' })
   }
 }
 

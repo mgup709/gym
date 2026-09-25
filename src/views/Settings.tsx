@@ -1,6 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { HealthSettings } from '@/components/health/HealthSettings'
 import { Button } from '@/components/ui/button'
 import { Card, Section } from '@/components/ui/card'
 import { Segmented, Switch } from '@/components/ui/controls'
@@ -17,7 +18,7 @@ import type { DayTargets, DayType, Exercise, PlannedExercise, QuickGroup, Range,
 import { MICROS } from '@/lib/types'
 import { cn, uid } from '@/lib/utils'
 
-const TARGET_KEYS: (DayType | 'default')[] = ['default', 'lowerA', 'upper', 'core', 'lowerB', 'glute', 'rest']
+const TARGET_KEYS: (DayType | 'default')[] = ['default', 'lowerA', 'upper', 'lowerB', 'lowerC', 'dance', 'core', 'rest']
 
 function RangeInput({ label, value, onChange, unit }: { label: string; value: Range; onChange: (r: Range) => void; unit: string }) {
   return (
@@ -111,6 +112,7 @@ export function SettingsView() {
                 }}
               >
                 <option value="rest">Rest</option>
+                <option value="dance">Dance night (no lifting)</option>
                 {templates.map((x) => (
                   <option key={x.id} value={x.id}>
                     {x.name}
@@ -160,6 +162,10 @@ export function SettingsView() {
             </button>
           ))}
         </div>
+      </Section>
+
+      <Section title="Apple Watch & Health" subtitle="Bring in watch workouts, sleep and resting heart rate">
+        <HealthSettings />
       </Section>
 
       <Section title="Quick Log & favorites" subtitle="What appears as one-tap checkboxes">
@@ -225,7 +231,7 @@ export function SettingsView() {
           <Field label="Height (in)">
             <NumInput value={settings.heightIn} onChange={(v) => set({ heightIn: v ?? settings.heightIn })} />
           </Field>
-          <Field label="Weight (lb)">
+          <Field label="Current weight (lb)" hint="Optional">
             <NumInput value={settings.baselineWeight} onChange={(v) => set({ baselineWeight: v ?? 0 })} />
           </Field>
         </div>

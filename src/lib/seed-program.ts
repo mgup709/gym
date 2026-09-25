@@ -6,7 +6,7 @@ const ex = (e: Ex): Exercise => ({ increment: 5, alternatives: [], ...e })
 export const SEED_EXERCISES: Exercise[] = [
   // Lower body — every one has the Pain / Discomfort option
   ex({ id: 'hip-thrust', name: 'Hip thrust', kind: 'weighted', cls: 'compound', knee: true, increment: 10, baseline: { weight: 130, reps: 9, sets: 1 }, alternatives: ['machine-hip-thrust', 'glute-bridge', 'b-stance-hip-thrust'], cues: 'Chin tucked, ribs down, full lockout with a 1-second squeeze.' }),
-  ex({ id: 'machine-hip-thrust', name: 'Machine hip thrust', kind: 'weighted', cls: 'compound', knee: true, increment: 10, alternatives: ['hip-thrust', 'glute-bridge'] }),
+  ex({ id: 'machine-hip-thrust', name: 'Machine / Smith hip thrust', kind: 'weighted', cls: 'compound', knee: true, increment: 10, alternatives: ['hip-thrust', 'glute-bridge'] }),
   ex({ id: 'glute-bridge', name: 'Barbell glute bridge', kind: 'weighted', cls: 'compound', knee: true, increment: 10, alternatives: ['hip-thrust', 'machine-hip-thrust', 'b-stance-hip-thrust'] }),
   ex({ id: 'b-stance-hip-thrust', name: 'B-stance hip thrust', kind: 'weighted', cls: 'unilateral', knee: true, perLeg: true, increment: 5, alternatives: ['hip-thrust', 'sl-glute-bridge'] }),
   ex({ id: 'rdl', name: 'Romanian deadlift', kind: 'weighted', cls: 'compound', knee: true, increment: 5, baseline: { weight: 74, reps: 9, sets: 1 }, alternatives: ['db-rdl', 'cable-pull-through', 'back-ext-45'], cues: 'Soft knees, hips back, stop when the hamstrings are long — not when the plates touch.' }),
@@ -83,12 +83,15 @@ const HEAVY: [number, number] = [120, 180]
 const UNI: [number, number] = [90, 120]
 const ISO: [number, number] = [60, 90]
 
+// Leg hypertrophy for the hourglass silhouette: glutes trained 3×/week and quads 2–3×/week, with no
+// lifting on dance night (a 2-hour dance session on top of a glute workout means low glycogen for both).
+// Weekly direct work ≈ glutes 16–20 hard sets, quads 12–15, hamstrings 7; upper body stays maintenance.
 export const SEED_TEMPLATES: WorkoutTemplate[] = [
   {
     id: 'lowerA',
-    name: 'Lower A — heavy glute + hamstring',
+    name: 'Lower A — heavy glutes + hamstrings',
     dayType: 'lowerA',
-    goal: 'Glute projection + hamstrings',
+    goal: 'Glute projection — heavy hip extension',
     exercises: [
       p('hip-thrust', 4, [6, 10], [1, 2], HEAVY),
       p('rdl', 3, [6, 10], [2, 2], HEAVY),
@@ -99,23 +102,54 @@ export const SEED_TEMPLATES: WorkoutTemplate[] = [
   },
   {
     id: 'upper',
-    name: 'Upper — maintenance / definition',
+    name: 'Upper + core',
     dayType: 'upper',
-    goal: 'Definition, posture and balanced back/arm development — not maximal shoulder width',
+    goal: 'Posture, back and arm definition, abs — not maximal shoulder width',
     exercises: [
       p('lat-pulldown', 3, [8, 12], [1, 3], UNI),
       p('cs-row', 3, [8, 12], [1, 3], UNI),
-      p('face-pull', 3, [12, 20], [0, 2], ISO, { note: '2–3 sets' }),
+      p('face-pull', 2, [12, 20], [0, 2], ISO),
       p('chest-press', 2, [8, 12], [1, 3], UNI),
       p('bicep-curl', 2, [10, 15], [0, 2], ISO),
       p('tricep-pressdown', 2, [10, 15], [0, 2], ISO),
+      p('cable-crunch', 3, [10, 15], [1, 2], ISO),
+      p('reverse-crunch', 2, [10, 15], [1, 2], ISO),
+    ],
+  },
+  {
+    id: 'lowerB',
+    name: 'Lower B — quads + glutes',
+    dayType: 'lowerB',
+    goal: 'Quad and glute size for the hip/thigh silhouette',
+    exercises: [
+      p('leg-press', 4, [8, 12], [1, 3], HEAVY, { note: 'Knee-friendly: leg press, hack squat or a squat variation.' }),
+      p('reverse-lunge', 3, [8, 12], [1, 2], [120, 120], { note: 'Or step-up.' }),
+      p('glute-bridge', 3, [8, 12], [1, 2], UNI, { note: 'Or another hip thrust variation.' }),
+      p('leg-extension', 3, [10, 15], [1, 2], ISO, { note: 'Only if your knees tolerate it.', optional: true }),
+      p('ham-curl', 2, [10, 15], [1, 2], ISO),
+      p('abduction', 2, [15, 25], [0, 2], ISO),
+    ],
+  },
+  {
+    id: 'lowerC',
+    name: 'Lower C — glute volume',
+    dayType: 'lowerC',
+    goal: 'Upper and side glute fullness with moderate loads — fresh enough for dancing tomorrow',
+    finisher: 'Dance night is tomorrow — a carb-rich dinner tonight helps refill glycogen.',
+    exercises: [
+      p('machine-hip-thrust', 3, [10, 15], [1, 2], UNI, { note: 'Moderate load, full squeeze at the top.' }),
+      p('cable-kickback', 3, [10, 15], [0, 2], ISO),
+      p('back-ext-45', 3, [10, 15], [1, 2], ISO, { note: 'Or single-leg glute bridge.' }),
+      p('abduction', 3, [15, 25], [0, 2], ISO),
+      p('leg-extension', 2, [12, 15], [1, 2], ISO, { optional: true, note: 'Light quad work — skip if knees complain.' }),
+      p('dead-bug', 2, [8, 12], [1, 2], [60, 60], { note: 'Or Pallof press. Reps per side.' }),
     ],
   },
   {
     id: 'core',
-    name: 'Core + recovery',
+    name: 'Core + recovery (optional)',
     dayType: 'core',
-    goal: 'Ab development and an easy recovery day',
+    goal: 'Abs and an easy recovery day — use on a weekend or when the week shifts',
     exercises: [
       p('cable-crunch', 3, [10, 15], [1, 2], ISO),
       p('reverse-crunch', 3, [10, 15], [1, 2], ISO),
@@ -123,35 +157,9 @@ export const SEED_TEMPLATES: WorkoutTemplate[] = [
       p('easy-cardio', 1, [20, 30], [3, 5], [0, 0], { optional: true, note: 'Optional, 20–30 min, conversational pace.' }),
     ],
   },
-  {
-    id: 'lowerB',
-    name: 'Lower B — glutes + quads',
-    dayType: 'lowerB',
-    goal: 'Glutes + quads for the hip/lower-body silhouette',
-    exercises: [
-      p('leg-press', 3, [8, 12], [1, 3], HEAVY, { note: 'Knee-friendly: leg press, hack squat or a squat variation.' }),
-      p('reverse-lunge', 3, [8, 12], [1, 2], [120, 120], { note: 'Or step-up.' }),
-      p('glute-bridge', 3, [8, 12], [1, 2], UNI),
-      p('leg-extension', 2, [10, 15], [1, 2], ISO, { note: 'Only if your knees tolerate it.', optional: true }),
-      p('ham-curl', 2, [10, 15], [1, 2], ISO),
-      p('abduction', 3, [15, 25], [0, 2], ISO, { note: '2–3 sets' }),
-    ],
-  },
-  {
-    id: 'glute',
-    name: 'Glute specialization (short)',
-    dayType: 'glute',
-    goal: 'Short glute session — salsa/bachata later',
-    finisher: 'Salsa / bachata later (about 2 h). Keep this session short and leave some energy for dancing.',
-    exercises: [
-      p('cable-kickback', 3, [10, 15], [0, 2], ISO),
-      p('back-ext-45', 3, [10, 15], [1, 2], ISO, { note: 'Or single-leg glute bridge.' }),
-      p('abduction', 3, [15, 25], [0, 2], ISO),
-      p('glute-pump', 2, [15, 30], [1, 3], [60, 60], { optional: true, note: 'Optional, 1–2 sets.' }),
-    ],
-  },
 ]
 
-/** index 0 = Sunday */
-export const DEFAULT_SCHEDULE = ['rest', 'lowerA', 'upper', 'core', 'lowerB', 'glute', 'rest']
-export const DEFAULT_TRAINING_TIMES: (string | null)[] = [null, '16:00', '16:00', '16:00', '16:00', '16:00', null]
+/** index 0 = Sunday. 'dance' = dance night, no lifting. */
+export const DEFAULT_SCHEDULE = ['rest', 'lowerA', 'upper', 'lowerB', 'lowerC', 'dance', 'rest']
+export const DEFAULT_TRAINING_TIMES: (string | null)[] = [null, '16:00', '16:00', '16:00', '16:00', null, null]
+export const PROGRAM_VERSION = 2

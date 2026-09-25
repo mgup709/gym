@@ -2,7 +2,8 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Chip, Segmented, Stepper } from '@/components/ui/controls'
-import { Field, Input } from '@/components/ui/input'
+import { Field, Input, NumInput } from '@/components/ui/input'
+import { FoodEditor } from './FoodEditor'
 import { Sheet } from '@/components/ui/sheet'
 import { toast } from '@/components/ui/toast'
 import { Pill } from '@/components/ui/card'
@@ -43,6 +44,8 @@ export function LogSheet({ open, onClose, food, entry, date, onLogged, meal: pre
   const [components, setComponents] = useState<Component[] | undefined>()
   const [addons, setAddons] = useState<Record<string, number>>({})
   const [meal, setMeal] = useState<MealSlot>('snack')
+  const [fix, setFix] = useState<Nutrients | null>(null)
+  const [editFood, setEditFood] = useState(false)
   const [time, setTime] = useState(nowHM())
   const [makeDefault, setMakeDefault] = useState(false)
   const [note, setNote] = useState('')
@@ -57,6 +60,7 @@ export function LogSheet({ open, onClose, food, entry, date, onLogged, meal: pre
       setMeal(entry.meal)
       setTime(entry.time)
       setNote(entry.note ?? '')
+      setFix(null)
     } else if (food) {
       const t = date === todayISO() ? nowHM() : '12:00'
       setQty(food.defaultQty ?? 1)
@@ -78,7 +82,9 @@ export function LogSheet({ open, onClose, food, entry, date, onLogged, meal: pre
   const preview = useMemo(() => {
     if (!lib) return null
     let per: Nutrients
-    if (baseFood) per = resolveFood(baseFood, lib, baseFood.kind === 'meal' ? components : undefined).nutrients
+    if (fix) per = fix
+    else if (entry && baseFood && !(baseFood.kind === 'meal' && JSON.stringify((components ?? []).filter((c) => c.qty > 0)) !== JSON.stringify(entry.components ?? (baseFood.components ?? []).filter((c) => c.qty > 0)))) per = entry.per
+    else if (baseFood) per = resolveFood(baseFood, lib, baseFood.kind === 'meal' ? components : undefined).nutrients
     else if (entry) per = entry.per
     else return null
     let add = zeroN()
@@ -87,11 +93,11 @@ export function LogSheet({ open, onClose, food, entry, date, onLogged, meal: pre
       if (f && q > 0) add = addN(add, resolveFood(f, lib).nutrients, q)
     }
     return addN(scaleN(per, qty), add)
-  }, [lib, baseFood, components, addons, qty, entry])
+  }, [lib, baseFood, components, addons, qty, entry, fix])
 
   if (!open) return null
   const title = baseFood?.name ?? entry?.name ?? ''
-  const isMeal = baseFood?.kind === 'meal' && components
+  const isMeal = baseFood?.kind === 'meal' && !baseFood.manual && components
   const addonIds = [...new Set([...(baseFood?.addons ?? []), ...Object.keys(addons)])]
   const extraAddons = ['chipotle-mayo', 'spicy-mayo', 'olive-oil', 'avocado-spray', 'maple-syrup', 'butter', 'cheese', 'almonds', 'peanut-butter'].filter((id) => !addonIds.includes(id) && !components?.some((c) => c.foodId === id))
 
@@ -117,9 +123,16 @@ export function LogSheet({ open, onClose, food, entry, date, onLogged, meal: pre
       const rebuilt = baseFood
         ? await buildEntry(date, baseFood, { qty, components: isMeal ? components : undefined, addons: Object.entries(addons).map(([foodId, q]) => ({ foodId, qty: q })), meal, time })
         : null
-      const next: FoodEntry = rebuilt
+      // Keep the entry's own nutrition snapshot unless its components changed or it was corrected by hand.
+      const compsChanged = !!isMeal && JSON.stringify((components ?? []).filter((c) => c.qty > 0)) !== JSON.stringify(entry.components ?? (baseFood?.components ?? []).filter((c) => c.qty > 0))
+      const base: FoodEntry = rebuilt
         ? { ...rebuilt, id: entry.id, createdAt: entry.createdAt, source: entry.source, date: entry.date, note: note || undefined }
         : { ...entry, qty, meal, time, note: note || undefined }
+      const next: FoodEntry = fix
+        ? { ...base, per: fix, components: undefined, serving: base.serving }
+        : compsChanged || !rebuilt
+          ? base
+          : { ...base, per: entry.per, servings: entry.servings }
       const prev = entry
       await db.entries.put(next)
       toast('Entry updated', () => restoreEntries([prev]))
@@ -166,6 +179,11 @@ export function LogSheet({ open, onClose, food, entry, date, onLogged, meal: pre
       <div className="space-y-5">
         {baseFood?.estimate && <Pill tone="amber">Estimated values — edit the food if your label differs</Pill>}
         {baseFood?.notes && <p className="text-sm text-ink-3">{baseFood.notes}</p>}
+        {baseFood && (
+          <button className="text-sm font-medium text-accent" onClick={() => setEditFood(true)}>
+            Edit default nutrition for {baseFood.kind === 'food' ? 'this food' : `this ${baseFood.kind}`} →
+          </button>
+        )}
         <div className="flex items-center justify-between gap-3">
           <div>
             <div className="text-sm font-medium">Servings</div>
@@ -263,8 +281,26 @@ export function LogSheet({ open, onClose, food, entry, date, onLogged, meal: pre
             Remember these portions for one-tap logging
           </label>
         )}
+        {entry && (
+          <details className="rounded-2xl border border-border p-3">
+            <summary className="cursor-pointer list-none text-sm font-medium">Correct the numbers for this entry only</summary>
+            <p className="mt-1 text-xs text-ink-3">Per serving. Doesn't change the saved food or other days.</p>
+            <div className="mt-2 grid grid-cols-5 gap-1.5">
+              {(['kcal', 'protein', 'carbs', 'fat', 'fiber'] as const).map((k) => (
+                <Field key={k} label={<span className="text-xs">{k === 'kcal' ? 'kcal' : k[0].toUpperCase() + k.slice(1, 4)}</span>}>
+                  <NumInput
+                    className="h-9 px-1 text-center text-sm"
+                    value={(fix ?? entry.per)[k]}
+                    onChange={(v) => setFix({ ...(fix ?? entry.per), [k]: v ?? 0 })}
+                  />
+                </Field>
+              ))}
+            </div>
+          </details>
+        )}
         {entry && entry.addons && baseFood == null && <p className="text-xs text-ink-3">Totals: <MacroLine n={entryTotal(entry)} /></p>}
       </div>
+      {baseFood && <FoodEditor open={editFood} food={baseFood} onClose={() => setEditFood(false)} />}
     </Sheet>
   )
 }

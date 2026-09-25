@@ -33,7 +33,6 @@ export async function startSession(template: WorkoutTemplate, date: ISODate): Pr
     exercises: template.exercises
       .filter((p) => exMap.has(p.exerciseId))
       .map((p) => buildSessionExercise(exMap.get(p.exerciseId)!, p, sessions)),
-    extras: template.dayType === 'glute' ? { dance: false } : undefined,
   }
   await db.sessions.put(session)
   return session

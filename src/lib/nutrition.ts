@@ -64,7 +64,7 @@ export function resolveFood(
   components?: Component[],
   depth = 0,
 ): { nutrients: Nutrients; servings: FoodServings } {
-  if (item.kind === 'food' || !item.components || depth > 4) {
+  if (item.kind === 'food' || item.manual || !item.components || depth > 4) {
     return { nutrients: item.nutrients, servings: item.servings ?? {} }
   }
   let nut = zeroN()
@@ -86,7 +86,7 @@ export function recomputeLibrary(foods: FoodItem[]): FoodItem[] {
   // Two passes so meals containing recipes see the recipes' fresh values.
   for (let pass = 0; pass < 2; pass++) {
     for (const f of foods) {
-      if (f.kind === 'food') continue
+      if (f.kind === 'food' || f.manual) continue
       const r = resolveFood(f, lib)
       const updated = { ...f, nutrients: r.nutrients, servings: r.servings }
       lib.set(f.id, updated)
@@ -146,6 +146,8 @@ export const DEFAULT_TARGETS: Record<DayType | 'default', DayTargets> = {
   upper: { kcal: r(1900, 1950), protein: r(125, 135), fat: r(60, 65), carbs: r(200, 215), fiber: r(25, 30) },
   core: { kcal: r(1875, 1925), protein: r(125, 135), fat: r(60, 65), carbs: r(195, 210), fiber: r(25, 30) },
   lowerB: { kcal: r(1950, 2000), protein: r(125, 135), fat: r(55, 60), carbs: r(225, 235), fiber: r(25, 30) },
+  lowerC: { kcal: r(1950, 2000), protein: r(125, 135), fat: r(55, 60), carbs: r(225, 235), fiber: r(25, 30) },
+  dance: { kcal: r(1975, 2025), protein: r(125, 135), fat: r(55, 60), carbs: r(230, 245), fiber: r(25, 30) },
   glute: { kcal: r(1975, 2025), protein: r(125, 135), fat: r(55, 60), carbs: r(230, 245), fiber: r(25, 30) },
   rest: { kcal: r(1850, 1950), protein: r(125, 135), fat: r(55, 65), carbs: null, fiber: r(25, 30) },
 }
@@ -203,6 +205,8 @@ export const DAY_TYPE_LABEL: Record<DayType, string> = {
   upper: 'Upper',
   core: 'Core + recovery',
   lowerB: 'Lower B',
-  glute: 'Glute + dance',
+  lowerC: 'Lower C',
+  dance: 'Dance night',
+  glute: 'Glute + dance (old plan)',
   rest: 'Rest',
 }

@@ -11,6 +11,8 @@ import { FoodView } from '@/views/Food'
 import { SetupView } from '@/views/Setup'
 import { TodayView } from '@/views/Today'
 import { useToday } from '@/lib/hooks'
+import { applyImport, parseImportParams } from '@/lib/health'
+import { toast } from '@/components/ui/toast'
 
 // Chart-heavy screens load on demand so Today and Food open instantly.
 const WorkoutView = lazy(() => import('@/views/Workout').then((m) => ({ default: m.WorkoutView })))
@@ -42,6 +44,18 @@ export default function App() {
   useEffect(() => {
     if (settings) applyTheme(settings.theme)
   }, [settings?.theme]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Apple Health import links (opened by an iOS Shortcut): #/import?workout=…&min=…&sleep=…
+  const importQuery = route.path[0] === 'import' ? route.query.toString() : null
+  useEffect(() => {
+    if (!ready || importQuery == null) return
+    const data = parseImportParams(new URLSearchParams(importQuery))
+    applyImport(data).then((r) => {
+      const parts = [r.added + r.updated ? `${r.added + r.updated} workout${r.added + r.updated === 1 ? '' : 's'}` : null, r.sleep ? 'sleep' : null, r.rhr ? 'resting HR' : null].filter(Boolean)
+      toast(parts.length ? `Imported from Apple Health: ${parts.join(', ')}` : 'Nothing to import in that link')
+      navigate('today', true)
+    })
+  }, [ready, importQuery])
 
   useEffect(() => {
     if (!settings?.notifications.browser || !measurements || !('Notification' in window) || Notification.permission !== 'granted') return

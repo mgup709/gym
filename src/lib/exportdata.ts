@@ -6,6 +6,7 @@ import { todayISO } from './dates'
 import type { Photo } from './types'
 import { MICROS } from './types'
 import { zip } from './zip'
+import { migrate } from './seed'
 
 function csvCell(v: unknown): string {
   if (v == null) return ''
@@ -19,7 +20,7 @@ export function toCSV(rows: Record<string, unknown>[], columns?: string[]): stri
 }
 
 export async function buildCSVs(): Promise<Record<string, string>> {
-  const [days, entries, foods, sessions, exercises, measurements, recovery, cycle, reviews] = await Promise.all([
+  const [days, entries, foods, sessions, exercises, measurements, recovery, cycle, reviews, activities] = await Promise.all([
     db.days.toArray(),
     db.entries.toArray(),
     db.foods.toArray(),
@@ -29,6 +30,7 @@ export async function buildCSVs(): Promise<Record<string, string>> {
     db.recovery.toArray(),
     db.cycle.toArray(),
     db.reviews.toArray(),
+    db.activities.toArray(),
   ])
   const names = new Map(exercises.map((e) => [e.id, e.name]))
   const allDates = [...days.map((d) => d.date), ...entries.map((e) => e.date)].sort()
@@ -130,6 +132,7 @@ export async function buildCSVs(): Promise<Record<string, string>> {
     'exercise_sets.csv': toCSV(sets),
     'measurements.csv': toCSV(meas),
     'recovery.csv': toCSV(recovery as unknown as Record<string, unknown>[]),
+    'watch_activities.csv': toCSV(activities as unknown as Record<string, unknown>[]),
     'cycle.csv': toCSV(cycle as unknown as Record<string, unknown>[]),
     'weekly_reviews.csv': toCSV(reviews.map((r) => ({ date: r.date, outcome: r.outcome, headline: r.headline, message: r.message, reasons: r.reasons.join(' | ') }))),
   }
@@ -148,7 +151,7 @@ async function dataURLToBlob(u: string): Promise<Blob> {
   return (await fetch(u)).blob()
 }
 
-const TABLES = ['settings', 'foods', 'entries', 'days', 'exercises', 'templates', 'sessions', 'recovery', 'cycle', 'measurements', 'reviews'] as const
+const TABLES = ['settings', 'foods', 'entries', 'days', 'exercises', 'templates', 'sessions', 'recovery', 'cycle', 'measurements', 'reviews', 'activities'] as const
 
 export async function buildJSON(includePhotos = true): Promise<string> {
   const out: Record<string, unknown> = { app: 'taper', version: 1, exportedAt: new Date().toISOString() }
@@ -171,6 +174,7 @@ export async function restoreJSON(text: string) {
     for (const t of TABLES) if (Array.isArray(data[t])) await db.table(t).bulkPut(data[t])
     await db.photos.bulkPut(photos)
   })
+  await migrate()
 }
 
 export function download(name: string, data: Blob | string, type = 'text/plain') {

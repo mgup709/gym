@@ -79,6 +79,8 @@ export interface FoodItem {
   addons?: string[]
   /** Servings logged by a one-tap Quick Log. */
   defaultQty?: number
+  /** Recipe/meal totals entered by hand instead of calculated from components. */
+  manual?: boolean
   /** Values are an estimate (restaurant / typical label) — worth checking. */
   estimate?: boolean
   notes?: string
@@ -120,7 +122,8 @@ export interface FoodEntry {
   createdAt: number
 }
 
-export type DayType = 'lowerA' | 'upper' | 'core' | 'lowerB' | 'glute' | 'rest'
+/** 'glute' is the retired Friday glute + dance day, kept so older history still reads correctly. */
+export type DayType = 'lowerA' | 'upper' | 'core' | 'lowerB' | 'lowerC' | 'dance' | 'glute' | 'rest'
 
 export interface Range {
   min: number
@@ -228,6 +231,7 @@ export interface Recovery {
   stress?: number
   sleep?: number
   sleepHours?: number
+  restingHR?: number
   preoccupation?: number
   binge?: BingeLevel
   note?: string
@@ -320,4 +324,19 @@ export interface Settings {
   notifications: { weeklyCheckIn: boolean; browser: boolean }
   checkpoints: { date: ISODate; label: string }[]
   lastBackup?: number
+  /** Bumped when the built-in program/targets are migrated. */
+  programVersion?: number
+}
+
+/** A workout or activity recorded elsewhere (Apple Watch via Apple Health, or entered by hand). */
+export interface Activity {
+  id: string
+  date: ISODate
+  source: 'apple-health' | 'manual'
+  type: string // e.g. 'Traditional Strength Training', 'Dance'
+  start?: string // 'HH:MM'
+  minutes: number
+  avgHR?: number
+  maxHR?: number
+  note?: string
 }

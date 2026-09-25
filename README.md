@@ -45,7 +45,7 @@ npm run e2e      # browser test of the core workflows (after build; uses the pre
 |---|---|---|---|
 | 1–3 | Philosophy, goals, health constraints | ✅ | Neutral wording throughout. No "cheat", "failed" or "burned off". No calories-from-exercise and nothing to "eat back". |
 | 4–5 | Baseline and primary variables | ✅ | All baseline circumferences and front widths are seeded as the baseline measurement. |
-| 6–14 | Program (Mon Lower A · Tue Upper · Wed Core · Thu Lower B · Fri Glute + dance) | ✅ | Every lower-body exercise has **Pain / discomfort**. Pain in 2 of the last 3 sessions flags the exercise and suggests alternatives (swap for one session or permanently). |
+| 6–14 | Program — v2 leg hypertrophy (Mon Lower A glutes · Tue Upper + core · Wed Lower B quads + glutes · Thu Lower C glute volume · Fri dance only) | ✅ | Every lower-body exercise has **Pain / discomfort**. Pain in 2 of the last 3 sessions flags the exercise and suggests alternatives (swap for one session or permanently). |
 | 7 | Strength baseline | ✅ | Hip thrust 130×9, RDL 74×9, abduction 85×10×3, face pull 20×12×3, curl 10×12×3 pre-fill the first session. |
 | 15 | Double progression | ✅ | Keep the load and add reps → add load once every set reaches the top of the range at the planned RIR. Pain holds progression. Reaching the top while grinding means repeat before adding load. Two sessions below the range suggest a small reduction. |
 | 16 | Rest periods | ✅ | A rest timer starts when a set is marked done (based on the exercise's rest time), with +30 s and skip. |
@@ -78,7 +78,39 @@ npm run e2e      # browser test of the core workflows (after build; uses the pre
 
 **Estimates to check against your labels.** Oats Overnight packets, Core Power, ISO100, the Good Culture serving, and the restaurant bowls are typical-label or USDA estimates. They carry an "Estimated" tag. Edit a food once and every recipe and meal that uses it updates.
 
+## Training week (v2)
+
+Aimed at glute and quad size for the hourglass shape. Glutes get 3 sessions a week and quads 2–3. There's no lifting on dance night: a glute workout plus 2 hours of salsa/bachata the same day leaves little glycogen for either.
+
+| Day | Session | Focus |
+|---|---|---|
+| Mon | Lower A | Heavy hip thrust, RDL, glute-biased split squat, abduction, hamstring curl |
+| Tue | Upper + core | Back, arms and posture (maintenance, no lateral-delt work) plus cable crunch and reverse crunch |
+| Wed | Lower B | Leg press / hack squat, reverse lunge, glute bridge, leg extension, hamstring curl, abduction |
+| Thu | Lower C | Moderate-load hip thrust, cable kickback, 45° back extension, abduction, light leg extension, dead bug |
+| Fri | Dance night | No lifting. Higher-carb targets. One tap logs the dancing, or it's detected from an Apple Watch dance workout. |
+
+The optional "Core + recovery" session is still in the library for weekends. Upgrading an existing install moves you onto this schedule. Days already logged keep their original day type and targets, and your old Friday targets carry over to dance night.
+
+## Editing nutrition
+
+- **A food's default values:** tap ⋯ on any Quick Log item → *Edit default nutrition*. You can also go to Food → Your foods.
+- **Recipes and meals:** these are calculated from their ingredients by default. Switch on *Set nutrition totals myself* to use the numbers from a label or restaurant instead.
+- **Restore defaults:** *Restore the app's default values* puts back the preloaded numbers.
+- **One logged entry only:** open the entry → *Correct the numbers for this entry only*.
+
+Editing an entry's time, meal or quantity keeps the nutrition values that were saved when you logged it.
+
+## Apple Watch / Apple Health
+
+A website can't read HealthKit, so data comes in two ways:
+
+- **Import link:** `…/#/import?workout=Strength&start=16:05&min=55&hr=128&sleep=7.5&rhr=58`. Repeat `w=Type~start~minutes~avgHR` for more than one workout. An iOS Shortcut can build this link and open it, including on a time-of-day automation. Step-by-step instructions are in Settings → Apple Watch & Health.
+- **CSV import** from a Health export app. Columns are detected automatically, and re-importing updates rather than duplicates.
+
+Imported workouts show on Today, in the workout summary and in the Workout tab. Sleep hours and resting heart rate fill in the daily check-in. Calories burned are never imported. Fully automatic background sync would need a native iPhone app.
+
 ## Automated tests
 
-- `src/test/engine.test.ts` (28 tests): recipe math, history snapshots and target changes, edit behaviour, add-ons and modifiers, double progression, pain flags and PRs, the meal-timing examples from the spec, suggestions, moving averages, all four weekly decision outcomes, cycle day, and the zip CRC.
+- `src/test/engine.test.ts` (33 tests, including the v2 migration, manual meal totals, and the Apple Health link and CSV parsing): recipe math, history snapshots and target changes, edit behaviour, add-ons and modifiers, double progression, pain flags and PRs, the meal-timing examples from the spec, suggestions, moving averages, all four weekly decision outcomes, cycle day, and the zip CRC.
 - `scripts/e2e.mjs`: runs in a real browser at phone size. Covers setup, quick log and uncheck and undo, the no-duplicate stepper, a customized poke bowl, suggestions, workout set, rest timer and summary, and the weekly check-in and recommendation. It also fails on any console error.

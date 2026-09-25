@@ -147,7 +147,7 @@ export function NutritionTrends({ settings, today }: { settings: Settings; today
 
 // ── Monthly summaries & comparison ──────────────────────
 
-const TYPES: DayType[] = ['lowerA', 'upper', 'core', 'lowerB', 'glute', 'rest']
+const TYPES: DayType[] = ['lowerA', 'upper', 'lowerB', 'lowerC', 'dance', 'core', 'glute', 'rest']
 
 function MonthCard({ m }: { m: MonthSummary }) {
   return (
@@ -276,7 +276,7 @@ export function DayTypeAnalysis({ today }: { today: ISODate }) {
           </tr>
         </thead>
         <tbody className="divide-y divide-border tabular-nums">
-          {TYPES.map((t) => {
+          {TYPES.filter((t) => t !== 'glute' || s.byType.glute).map((t) => {
             const b = s.byType[t]
             return (
               <tr key={t}>

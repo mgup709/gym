@@ -45,9 +45,14 @@ export function RecoverySheet({ open, onClose, date }: { open: boolean; onClose:
         {REC_FIELDS.map((f) => (
           <Rating key={f.key} label={f.label} low={f.low} high={f.high} value={rec[f.key as 'hunger']} onChange={(v) => set({ [f.key]: v })} />
         ))}
-        <Field label="Sleep (hours, optional)">
-          <NumInput value={rec.sleepHours} onChange={(v) => set({ sleepHours: v ?? undefined })} step="0.25" className="w-28" />
-        </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Sleep (hours)" hint="Fills in from Apple Health if set up">
+            <NumInput value={rec.sleepHours} onChange={(v) => set({ sleepHours: v ?? undefined })} step="0.25" />
+          </Field>
+          <Field label="Resting HR (optional)">
+            <NumInput value={rec.restingHR} onChange={(v) => set({ restingHR: v ?? undefined })} />
+          </Field>
+        </div>
         <div>
           <div className="mb-1.5 text-sm font-medium">Binge / loss-of-control eating</div>
           <div className="grid grid-cols-2 gap-1.5">

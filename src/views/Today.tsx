@@ -8,6 +8,7 @@ import { NutritionSummary } from '@/components/food/NutritionSummary'
 import { QuickLog } from '@/components/food/QuickLog'
 import { SuggestSheet } from '@/components/food/SuggestSheet'
 import { useDay } from '@/components/food/useDay'
+import { ActivityList, DanceToggle } from '@/components/health/Activities'
 import { patchRecovery, RecoverySheet } from '@/components/recovery/RecoverySheet'
 import { Button } from '@/components/ui/button'
 import { Card, CardHeader, Pill } from '@/components/ui/card'
@@ -82,11 +83,13 @@ export function TodayView() {
           <button onClick={() => setDayOpen(true)}>
             <Pill tone="accent">{DAY_TYPE_LABEL[day.dayType]}</Pill>
           </button>
-          <button onClick={() => setDayOpen(true)}>
-            <Pill>
-              <Clock className="size-3" /> {training ? `Training ${fmtTime(training)}` : 'No training time'}
-            </Pill>
-          </button>
+          {(training || day.dayType !== 'dance') && (
+            <button onClick={() => setDayOpen(true)}>
+              <Pill>
+                <Clock className="size-3" /> {training ? `Training ${fmtTime(training)}` : 'No training time'}
+              </Pill>
+            </button>
+          )}
           {dance && <Pill tone="sage">Dance {fmtTime(dance)}</Pill>}
           {cycle && (
             <Pill>
@@ -136,9 +139,22 @@ export function TodayView() {
               </Button>
             )}
           </div>
+        ) : day.dayType === 'dance' ? (
+          <div className="space-y-3">
+            <div>
+              <div className="font-display text-xl leading-snug">Dance night — no lifting</div>
+              <p className="text-sm text-ink-2">
+                Salsa / bachata{dance ? ` at ${fmtTime(dance)}` : ''} (about 2 hours). Legs got their work this week; tonight carbs earlier in the day help you feel good on the floor.
+              </p>
+            </div>
+            <DanceToggle date={today} />
+          </div>
         ) : (
           <p className="text-sm text-ink-2">Rest day. Recovery is part of the plan — an easy walk is optional.</p>
         )}
+        <div className="mt-3">
+          <ActivityList date={today} />
+        </div>
       </Card>
 
       <Card>
@@ -234,7 +250,7 @@ function DaySheet({ open, onClose, date, dayType, training }: { open: boolean; o
       <div className="space-y-4">
         <Field label="Day type" hint="Swapped days? Changing this updates today's targets and workout.">
           <Select value={dayType} onChange={(e) => setDayType(date, e.target.value as DayType)}>
-            {(Object.keys(DAY_TYPE_LABEL) as DayType[]).map((t) => (
+            {(Object.keys(DAY_TYPE_LABEL) as DayType[]).filter((t) => t !== 'glute').map((t) => (
               <option key={t} value={t}>
                 {DAY_TYPE_LABEL[t]}
               </option>

@@ -13,6 +13,7 @@ import { MICRO_INFO, resolveFood } from '@/lib/nutrition'
 import { autoSlot, logQuickMacros, saveFood } from '@/lib/repo'
 import type { Component, FoodCategory, FoodItem, ISODate, MealSlot, Nutrients, QuickGroup } from '@/lib/types'
 import { MICROS } from '@/lib/types'
+import { SEED_FOODS } from '@/lib/seed-foods'
 import { uid } from '@/lib/utils'
 import { MacroLine, MEALS, MEAL_LABEL } from './LogSheet'
 
@@ -60,7 +61,8 @@ export function FoodEditor({ open, onClose, food, kind = 'food' }: { open: boole
   }, [open, food, kind])
 
   const lib = useMemo(() => new Map((all ?? []).map((x) => [x.id, x])), [all])
-  const computed = f.kind !== 'food' && all ? resolveFood(f, lib).nutrients : null
+  const computed = f.kind !== 'food' && all ? resolveFood({ ...f, manual: false }, lib).nutrients : null
+  const seed = SEED_FOODS.find((x) => x.id === f.id)
   const setN = (k: keyof Omit<Nutrients, 'micros'>, v: number | null) => setF({ ...f, nutrients: { ...f.nutrients, [k]: v ?? 0 } })
 
   const save = async () => {
@@ -128,7 +130,20 @@ export function FoodEditor({ open, onClose, food, kind = 'food' }: { open: boole
           </Field>
         </div>
 
-        {f.kind === 'food' ? (
+        {(f.kind === 'food' || f.manual) && f.kind !== 'food' && (
+          <p className="rounded-2xl bg-amber-soft px-3 py-2 text-xs text-ink-2">
+            Using your own totals per serving. The ingredient list below is kept for reference and quick adjustments when logging, but doesn't change these numbers.
+          </p>
+        )}
+        {f.kind !== 'food' && (
+          <Switch
+            checked={!!f.manual}
+            onChange={(v) => setF({ ...f, manual: v, nutrients: v && computed ? { ...computed } : f.nutrients })}
+            label="Set nutrition totals myself"
+            hint="Use this when a label or restaurant lists different numbers than the calculation."
+          />
+        )}
+        {f.kind === 'food' || f.manual ? (
           <>
             <div className="grid grid-cols-3 gap-3">
               <Field label="Calories">
@@ -170,7 +185,8 @@ export function FoodEditor({ open, onClose, food, kind = 'food' }: { open: boole
               </div>
             </Section>
           </>
-        ) : (
+        ) : null}
+        {f.kind !== 'food' && (
           <div className="space-y-3">
             {f.kind === 'recipe' && (
               <div className="flex items-center justify-between">
@@ -220,12 +236,24 @@ export function FoodEditor({ open, onClose, food, kind = 'food' }: { open: boole
                 Add
               </Button>
             </div>
-            {computed && (
+            {computed && !f.manual && (
               <p className="rounded-2xl bg-surface-2 px-3 py-2 text-sm">
                 Per serving: <MacroLine n={computed} className="font-medium tabular-nums" />
               </p>
             )}
           </div>
+        )}
+        {seed && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setF({ ...f, nutrients: structuredClone(seed.nutrients), components: structuredClone(seed.components), yield: seed.yield, manual: false, servings: seed.servings, serving: seed.serving })
+              toast('Original values restored — save to keep them')
+            }}
+          >
+            Restore the app's default values
+          </Button>
         )}
         <Switch checked={!!f.favorite} onChange={(v) => setF({ ...f, favorite: v })} label="Favorite" />
         <Switch checked={!!f.estimate} onChange={(v) => setF({ ...f, estimate: v })} label="Values are an estimate" hint="Shows a reminder to check the label or portion" />
